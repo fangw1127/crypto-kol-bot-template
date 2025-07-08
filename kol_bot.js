@@ -1,52 +1,52 @@
-// === 手动加载 .env 文件 ===
-import dotenv from 'dotenv'
-dotenv.config()
-
 import { Telegraf } from 'telegraf';
-import fetch from 'node-fetch';
+import dotenv from 'dotenv';
+import axios from 'axios';
 
+dotenv.config();
+
+// === 环境变量校验 ===
 const BOT_TOKEN = process.env.BOT_TOKEN;
-if (!BOT_TOKEN) throw new Error("❌ BOT_TOKEN is missing in environment variables.");
-const bot = new Telegraf(BOT_TOKEN);
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4';
 
-const BINANCE_BASE = 'https://api.binance.com';
-
-// 获取币安价格
-async function getBinancePrice(symbol, isFutures = false) {
-  const base = isFutures
-    ? 'https://fapi.binance.com'
-    : 'https://api.binance.com';
-  const url = `${base}/fapi/v1/ticker/price?symbol=${symbol.toUpperCase()}`;
-  try {
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.price) {
-      return `💰 ${symbol.toUpperCase()} 当前价格: ${parseFloat(data.price).toFixed(2)} USDT`;
-    } else {
-      return `❌ 无法获取 ${symbol} 的价格，可能币种不存在或格式错误`;
-    }
-  } catch (e) {
-    return `⚠️ 获取价格失败: ${e.message}`;
-  }
+if (!BOT_TOKEN) {
+  throw new Error('❌ BOT_TOKEN is missing in environment variables.');
 }
 
-// /price 命令
-bot.command('price', async (ctx) => {
-  const parts = ctx.message.text.split(' ');
-  const symbol = parts[1]?.toUpperCase();
-  const isFutures = parts.includes('--futures');
+const bot = new Telegraf(BOT_TOKEN);
 
-  if (!symbol) {
-    return ctx.reply('📌 用法: /price BTC 或 /price BTCUSDT --futures');
-  }
-
-  // 判断是否为现货币种（如 BTC）
-  const spotSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`;
-  const priceMsg = await getBinancePrice(spotSymbol, isFutures);
-  return ctx.reply(priceMsg);
+// === /start 命令 ===
+bot.start((ctx) => {
+  console.log('✅ 收到 /start');
+  ctx.reply('欢迎使用 📈 KOL 合约机器人！发送 /price BTC 查询现价');
 });
 
-// 启动 Bot
-bot.launch();
-console.log("✅ KOL Bot (GPT-4) 已启动...");
+// === /price 命令 ===
+bot.command('price', async (ctx) => {
+  const text = ctx.message.text;
+  const args = text.split(' ');
+  const symbol = (args[1] || 'BTC').toUpperCase();
 
+  const pair = symbol + 'USDT';
+
+  try {
+    const response = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${pair}`);
+    const price = parseFloat(response.data.price).toFixed(2);
+    const reply = `💰 ${symbol}/USDT 当前价格: $${price}`;
+    console.log(`[PRICE] ${symbol} => $${price}`);
+    ctx.reply(reply);
+  } catch (error) {
+    console.error('❌ 获取价格失败:', error.message);
+    ctx.reply(`❌ 获取 ${symbol} 价格失败`);
+  }
+});
+
+// === 任意文字回复，用于调试 ===
+bot.on('text', async (ctx) => {
+  console.log('🗣 收到文本消息:', ctx.message.text);
+  ctx.reply('👋 我收到你的消息了，可用命令：/price BTC');
+});
+
+// === 启动 bot ===
+bot.launch({ dropPendingUpdates: true });
+console.log('✅ KOL Bot 已启动...');
