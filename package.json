@@ -1,16 +1,16 @@
 {
   "name": "crypto-kol-bot",
   "version": "1.0.0",
-  "main": "kol_bot.js",
+  "description": "GPT-4 合约专家机器人",
   "type": "module",
+  "main": "kol_bot.js",
   "scripts": {
     "start": "node kol_bot.js"
   },
   "dependencies": {
-    "technicalindicators": "^3.1.0",
-    "dotenv": "^16.4.5",
-    "axios": "^1.6.7",
-    "node-fetch": "^2.6.1",
-    "node-telegram-bot-api": "^0.61.0"
+    "axios": "^1.6.8",
+    "dotenv": "^16.3.1",
+    "node-telegram-bot-api": "^0.61.0",
+    "openai": "^4.21.1"
   }
 }
