@@ -1,42 +1,45 @@
 import { Telegraf } from 'telegraf'
 import axios from 'axios'
 import dotenv from 'dotenv'
+
 dotenv.config()
+
+if (!process.env.BOT_TOKEN) {
+  throw new Error('❌ BOT_TOKEN is missing in environment variables.')
+}
 
 const bot = new Telegraf(process.env.BOT_TOKEN)
 
-// /start 命令
 bot.start((ctx) => {
   ctx.reply('你好，我是 GPT-4 合约机器人 👋')
 })
 
-// /price 命令
 bot.command('price', async (ctx) => {
-  const parts = ctx.message.text.split(' ')
-  const symbol = (parts[1] || '').toUpperCase()
-  if (!symbol) {
-    return ctx.reply('请提供币种，例如 /price BTC')
+  const input = ctx.message.text.split(' ')
+  if (input.length < 2) {
+    return ctx.reply('❌ 用法错误，请输入 /price BTC')
   }
 
+  const symbol = input[1].toUpperCase()
   const pair = `${symbol}USDT`
 
   try {
-    // 获取现货和合约价格
-    const [spotRes, futRes] = await Promise.all([
+    const [spot, fut] = await Promise.all([
       axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${pair}`),
       axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${pair}`)
     ])
 
-    const spotPrice = parseFloat(spotRes.data.price).toFixed(2)
-    const futPrice = parseFloat(futRes.data.price).toFixed(2)
+    const spotPrice = parseFloat(spot.data.price).toFixed(2)
+    const futPrice = parseFloat(fut.data.price).toFixed(2)
 
     ctx.reply(
-      `${pair} 当前价格：\n现货：$${spotPrice}\n合约：$${futPrice}`
+      `📈 ${symbol} 当前价格：\n现货：$${spotPrice}\n合约：$${futPrice}`
     )
-  } catch (error) {
-    ctx.reply(`❌ 无法获取 ${pair} 价格，可能币种不存在`)
+  } catch (e) {
+    ctx.reply(`❌ 查询失败，${symbol} 可能不是支持的币种`)
   }
 })
 
+// 启动机器人
 bot.launch()
 console.log('✅ KOL Bot 已启动...')
