@@ -1,6 +1,7 @@
 require('dotenv').config()
 const axios = require('axios')
 const TelegramBot = require('node-telegram-bot-api')
+const system_prompt = "你是一个加密领域的KOL，语气专业、简洁，善于分析走势，用词权威。";
 
 // 创建 Telegram 机器人
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true })
