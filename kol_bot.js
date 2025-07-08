@@ -1,40 +1,47 @@
-import 'dotenv/config';
+import 'dotenv/config'; // 直接加载 .env 文件（等同于 dotenv.config()）
 import { Telegraf } from 'telegraf';
-import OpenAI from 'openai';
+import { OpenAI } from 'openai';
 
+// ✅ 校验 BOT_TOKEN 是否存在
+if (!process.env.BOT_TOKEN) {
+  console.error("❌ BOT_TOKEN is missing in environment variables.");
+  process.exit(1);
+}
+
+// ✅ 初始化 Telegraf Bot
 const bot = new Telegraf(process.env.BOT_TOKEN);
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-bot.start((ctx) => {
-  ctx.reply('👋 欢迎使用合约 KOL 机器人！请输入你关心的币种或合约问题。');
+// ✅ 初始化 OpenAI（GPT-4）
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
+// ✅ 指令处理（/start）
+bot.start((ctx) => {
+  ctx.reply('👋 欢迎使用 KOL 合约机器人！发送任意问题开始对话～');
+});
+
+// ✅ 普通消息处理：调用 GPT-4
 bot.on('text', async (ctx) => {
   const userMessage = ctx.message.text;
-
   try {
+    // 发给 OpenAI
     const completion = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: [
-        {
-          role: 'system',
-          content: '你是一个专业的加密货币合约专家，用通俗易懂的 KOL 语气回答用户问题。请结合实际市场情况与投资逻辑，提供明确观点。',
-        },
-        {
-          role: 'user',
-          content: userMessage,
-        },
+        { role: 'system', content: '你是一个中文加密货币KOL，语气专业、有逻辑，擅长分析合约交易策略。' },
+        { role: 'user', content: userMessage },
       ],
-      temperature: 0.7
     });
 
-    const reply = completion.choices[0].message.content;
-    ctx.reply(reply);
+    const reply = completion.choices[0]?.message?.content?.trim();
+    ctx.reply(reply || '⚠️ GPT 回复为空，请稍后再试。');
   } catch (err) {
-    console.error('❌ OpenAI 错误:', err);
-    ctx.reply('⚠️ 无法获取 GPT-4 回应，请稍后再试。');
+    console.error("GPT 请求失败：", err);
+    ctx.reply('⚠️ 出错了，请稍后再试。');
   }
 });
 
+// ✅ 启动 bot
 bot.launch();
 console.log('✅ KOL Bot (GPT-4) 已启动...');
