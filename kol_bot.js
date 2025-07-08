@@ -41,7 +41,7 @@ bot.on('message', async (msg) => {
     const { data } = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4',
         messages: [
           { role: 'system', content: '你是一个专业的加密货币策略分析师，结合市场行情，回答用户问题。' },
           { role: 'user', content: `${market}\n\n用户提问：${question}` },
