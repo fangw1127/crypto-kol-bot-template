@@ -1,7 +1,6 @@
 {
   "name": "crypto-kol-bot",
   "version": "1.0.0",
-  "description": "GPT-4 合约专家机器人",
   "type": "module",
   "main": "kol_bot.js",
   "scripts": {
@@ -10,7 +9,8 @@
   "dependencies": {
     "axios": "^1.6.8",
     "dotenv": "^16.3.1",
-    "node-telegram-bot-api": "^0.61.0",
-    "openai": "^4.21.1"
+    "openai": "^4.30.0",
+    "telegraf": "^4.16.2",
+    "technicalindicators": "^3.0.1"
   }
 }
