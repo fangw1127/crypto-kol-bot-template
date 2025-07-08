@@ -49,7 +49,6 @@ bot.command('info', async (ctx) => {
       return ctx.reply(
         `📘 合约币种信息：${symbol}USDT\n` +
         `类型：${futSymbol.contractType} 合约\n` +
-        `杠杆范围：1 ~ ${futSymbol.maxLeverage} 倍\n` +
         `最小下单量：${filters.LOT_SIZE.minQty}\n` +
         `价格精度：${filters.PRICE_FILTER.tickSize}`
       );
