@@ -1,7 +1,6 @@
 require('dotenv').config()
 const axios = require('axios')
 const TelegramBot = require('node-telegram-bot-api')
-const system_prompt = "你是一个加密领域的KOL，语气专业、简洁，善于分析走势，用词权威。";
 
 // 创建 Telegram 机器人
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true })
@@ -43,7 +42,7 @@ bot.on('message', async (msg) => {
       {
         model: 'gpt-4',
         messages: [
-          { role: 'system', content: '你是一个专业的加密货币策略分析师，结合市场行情，回答用户问题。' },
+          { role: 'system', content: '你是一位经验丰富的合约交易专家，擅长分析币种的趋势、支撑压力位、合约方向、入场价格、止盈止损建议。你的语言简洁明确，具有实战操作性。' },
           { role: 'user', content: `${market}\n\n用户提问：${question}` },
         ],
         max_tokens: 500,
