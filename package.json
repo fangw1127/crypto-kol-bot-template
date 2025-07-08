@@ -6,9 +6,10 @@
     "start": "node kol_bot.js"
   },
   "dependencies": {
-  "axios": "^1.5.0",
   "dotenv": "^16.3.0",
   "telegraf": "^4.13.2",
-  "node-telegram-bot-api": "^0.61.0"
+  "axios": "^1.6.8",        // 版本可以自动调整
+  "node-telegram-bot-api": "^0.61.0",
+  "openai": "^4.0.0"
   }
 }
