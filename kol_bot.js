@@ -1,55 +1,64 @@
-import dotenv from "dotenv";
+// kol_bot.js (ES Module Version - Railway-ready)
+import dotenv from 'dotenv';
 dotenv.config();
 
-console.log("Bot Token:", process.env.TELEGRAM_TOKEN);  // ✅ 检查点
 import { Telegraf } from 'telegraf';
-const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
+import { Configuration, OpenAIApi } from 'openai';
+import fetch from 'node-fetch';
 
-import axios from 'axios';
-import TelegramBot from 'node-telegram-bot-api';
-import OpenAI from 'openai';
+// === 环境变量加载校验 ===
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+if (!TELEGRAM_TOKEN || !OPENAI_API_KEY) {
+  console.error('[❌ ERROR] Missing TELEGRAM_TOKEN or OPENAI_API_KEY in environment variables');
+  process.exit(1);
+}
 
-const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
+// === 初始化 Telegram Bot ===
+const bot = new Telegraf(TELEGRAM_TOKEN);
 
-bot.onText(/\/start/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, `👋 欢迎使用【合约专家 KOL 机器人】
+// === 初始化 OpenAI ===
+const openai = new OpenAIApi(
+  new Configuration({ apiKey: OPENAI_API_KEY })
+);
 
-请输入币种（如：BTCUSDT）获取最新现价与策略建议：
-📊 涨跌趋势 + 杠杆建议 + 止盈止损`);
-});
+// === 用户命令响应 ===
+bot.start((ctx) => ctx.reply('👋 欢迎使用 KOL 合约机器人！请输入币种名称，如 "BTCUSDT"'));
 
-bot.on('message', async (msg) => {
-  const chatId = msg.chat.id;
-  const text = msg.text.trim().toUpperCase();
-  if (text.startsWith('/')) return;
+bot.on('text', async (ctx) => {
+  const query = ctx.message.text.trim().toUpperCase();
+  if (!/^[A-Z]{3,10}USDT$/.test(query)) {
+    return ctx.reply('⚠️ 币种格式错误，请输入如 BTCUSDT 或 ETHUSDT');
+  }
 
   try {
-    const res = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${text}`);
-    const price = parseFloat(res.data.price);
+    ctx.reply(`📊 获取 ${query} 合约信息中...`);
 
-    const prompt = `
-你是一个资深的币圈合约交易专家，现在${text}的价格为 ${price} USDT。
-请判断未来1小时的市场趋势，并给出以下建议：
-1. 未来1小时预测趋势（涨/跌/震荡）
-2. 推荐交易方向（做多/做空/观望）
-3. 建议杠杆倍数（如 5x、10x 等）
-4. 止盈止损设置（%范围）
-请用简洁中文回答。`;
+    // Binance 最新价格
+    const priceRes = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${query}`);
+    const priceData = await priceRes.json();
+    const price = parseFloat(priceData.price).toFixed(4);
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [{ role: 'user', content: prompt }],
+    // 使用 OpenAI 获取预测建议
+    const prompt = `你是一个专业的加密货币合约分析师。当前币种为 ${query}，现价 ${price}。请给出未来1小时涨跌趋势预测，并建议合理的杠杆倍数与止盈止损策略。用简洁专业口吻回复。`;
+    const aiRes = await openai.createChatCompletion({
+      model: 'gpt-3.5-turbo',
+      messages: [{ role: 'user', content: prompt }]
     });
 
-    const reply = completion.choices[0].message.content;
-    bot.sendMessage(chatId, `📈 【${text}】当前价格：${price} USDT\n\n🤖 策略建议：\n${reply}`);
-  } catch (err) {
-    console.error('❌ 出错', err.message || err);
-    bot.sendMessage(chatId, `⚠️ 获取币种行情或策略失败，请检查币种是否正确（如 BTCUSDT）`);
+    const suggestion = aiRes.data.choices[0].message.content;
+    ctx.reply(`📈 ${query} 当前价格：$${price}\n\n🤖 AI 策略建议：\n${suggestion}`);
+  } catch (e) {
+    console.error('❌ 错误:', e);
+    ctx.reply('⚠️ 获取失败，请稍后重试。');
   }
 });
+
+// === 启动 Bot ===
+bot.launch();
+console.log('🤖 KOL 合约机器人启动成功！');
+
+// === 优雅关闭 ===
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
