@@ -1,15 +1,17 @@
 {
   "name": "crypto-kol-bot",
   "version": "1.0.0",
+  "description": "A Telegram crypto bot with KOL tone",
   "main": "kol_bot.js",
   "scripts": {
     "start": "node kol_bot.js"
   },
   "dependencies": {
-  "dotenv": "^16.3.0",
-  "telegraf": "^4.13.2",
-  "axios": "^1.6.8",        // 版本可以自动调整
-  "node-telegram-bot-api": "^0.61.0",
-  "openai": "^4.0.0"
+    "axios": "^1.6.8",
+    "node-telegram-bot-api": "^0.61.0",
+    "openai": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
