@@ -1,102 +1,70 @@
-// kol_bot_v2.js
-require('dotenv').config();
-const TelegramBot = require('node-telegram-bot-api');
-const axios = require('axios');
-const { Configuration, OpenAIApi } = require('openai');
+// === kol_bot.js (V2版，支持GPT-4、币安全币种、AI合约建议、多币种行情） ===
 
-// === 初始化 ===
+import dotenv from "dotenv";
+dotenv.config();
+
+import OpenAI from "openai";
+import TelegramBot from "node-telegram-bot-api";
+import axios from "axios";
+
+// === 初始化 OpenAI GPT-4 ===
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// === 初始化 Telegram Bot ===
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
-const openai = new OpenAIApi(new Configuration({ apiKey: process.env.OPENAI_API_KEY }));
 
-let spotSymbols = new Set();
-let futuresSymbols = new Set();
+// === 币安行情 API ===
+const BINANCE_BASE = "https://api.binance.com";
 
-// === 加载支持币种（现货 + 合约） ===
-async function loadSymbols() {
-  try {
-    const spotRes = await axios.get('https://api.binance.com/api/v3/exchangeInfo');
-    spotSymbols = new Set(spotRes.data.symbols.map(s => s.symbol));
-
-    const futRes = await axios.get('https://fapi.binance.com/fapi/v1/exchangeInfo');
-    futuresSymbols = new Set(futRes.data.symbols.map(s => s.symbol));
-
-    console.log('✅ 币种列表加载完成');
-  } catch (err) {
-    console.error('❌ 币种列表加载失败', err.message);
-  }
-}
-loadSymbols();
-
-// === 获取现价 ===
 async function getPrice(symbol) {
   try {
-    const res = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
+    const res = await axios.get(`${BINANCE_BASE}/api/v3/ticker/price`, {
+      params: { symbol },
+    });
     return parseFloat(res.data.price);
   } catch (err) {
-    try {
-      const res = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
-      return parseFloat(res.data.price);
-    } catch (e) {
-      return null;
-    }
+    return null;
   }
 }
 
-// === 生成图表链接（QuickChart 示例） ===
-function getChartUrl(symbol) {
-  return `https://quickchart.io/chart?c={type:'line',data:{labels:['-60min','','','','','','','now'],datasets:[{label:'${symbol}',data:[60,61,62,64,63,65,66]}]}}`;
-}
-
-// === GPT 合约建议 ===
-async function getAiSuggestion(symbol, price) {
-  const prompt = `你是一个专业的加密货币合约分析师，现在${symbol}的价格是 ${price} 美元。请基于当前市场趋势和AI预测，判断未来1小时走势（上涨/下跌/震荡），并给出合约建议，包括建议方向（多/空/观望）、推荐杠杆倍数、止盈止损价格。\n\n请使用以下格式回答：\n📈 趋势判断：\n💡 操作建议：\n🎯 止盈止损：`;
-
-  const res = await openai.createChatCompletion({
-    model: 'gpt-4',
-    messages: [{ role: 'user', content: prompt }],
-    temperature: 0.7,
-  });
-
-  return res.data.choices[0].message.content;
-}
-
-// === 通用指令处理 ===
-bot.onText(/\/(分析|行情|图表|推荐)\s*(\w+)/i, async (msg, match) => {
-  const cmd = match[1].toLowerCase();
-  const base = match[2].toUpperCase();
-  const symbol = base + 'USDT';
-  const chatId = msg.chat.id;
-
-  if (!spotSymbols.has(symbol) && !futuresSymbols.has(symbol)) {
-    return bot.sendMessage(chatId, `❌ 不支持的币种：${base}`);
-  }
-
-  if (cmd === '图表') {
-    const url = getChartUrl(symbol);
-    return bot.sendPhoto(chatId, url, { caption: `${base} 图表（模拟图）` });
-  }
-
+// === AI 合约建议生成器 ===
+async function generateStrategy(symbol) {
   const price = await getPrice(symbol);
-  if (!price) {
-    return bot.sendMessage(chatId, '⚠️ 获取价格失败');
+  if (!price) return `❌ 无法获取 ${symbol} 的现价`;
+
+  const userPrompt = `你是一个专业的加密货币合约交易分析师。请针对币种 ${symbol} 当前价格为 ${price} USDT，预测未来1小时内的价格趋势（上涨、下跌、震荡），并给出：
+1. 建议方向（做多/做空/观望）
+2. 推荐杠杆倍数
+3. 止盈止损建议
+4. 简要理由（100字以内）`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [{ role: "user", content: userPrompt }],
+    });
+    return completion.choices[0].message.content;
+  } catch (err) {
+    return `❌ GPT 调用失败: ${err.message}`;
+  }
+}
+
+// === 监听 Telegram 消息 ===
+bot.onText(/\/(.+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const command = match[1].trim().toUpperCase();
+
+  if (!command.endsWith("USDT")) {
+    bot.sendMessage(chatId, "⚠️ 请输入币种格式，例如：/BTCUSDT 或 /ETHUSDT");
+    return;
   }
 
-  if (cmd === '行情') {
-    return bot.sendMessage(chatId, `📊 ${base} 当前价格：$${price.toFixed(2)}`);
-  }
-
-  if (cmd === '分析' || cmd === '推荐') {
-    bot.sendMessage(chatId, `💬 正在分析 ${base} ...`);
-    try {
-      const suggestion = await getAiSuggestion(symbol, price);
-      return bot.sendMessage(chatId, suggestion);
-    } catch (e) {
-      return bot.sendMessage(chatId, '⚠️ AI 分析失败');
-    }
-  }
+  bot.sendMessage(chatId, `📊 正在分析 ${command}...`);
+  const response = await generateStrategy(command);
+  bot.sendMessage(chatId, response);
 });
 
-// === 帮助指令 ===
-bot.onText(/\/start|\/help/, (msg) => {
-  bot.sendMessage(msg.chat.id, `📈 欢迎使用合约KOL机器人\n支持命令：\n/分析 BTC\n/行情 OP\n/图表 SUI\n/推荐 LDO`);
-});
+// === 启动成功提示 ===
+console.log("🤖 Crypto-KOL 合约专家机器人已启动");
