@@ -1,7 +1,7 @@
 {
   "name": "crypto-kol-bot",
   "version": "1.0.0",
-  "description": "A Telegram crypto KOL bot with OpenAI & Binance integration",
+  "description": "Telegram crypto bot with OpenAI and Binance integration",
   "main": "kol_bot.js",
   "type": "commonjs",
   "scripts": {
@@ -12,7 +12,7 @@
     "dotenv": "^16.3.1",
     "openai": "^3.3.0",
     "node-telegram-bot-api": "^0.61.0",
-    "technicalindicators": "^2.1.6",
+    "technicalindicators": "1.1.18",
     "chart.js": "^4.4.0"
   }
 }
