@@ -1,64 +1,64 @@
-require('dotenv').config()
-const axios = require('axios')
-const TelegramBot = require('node-telegram-bot-api')
+const TelegramBot = require('node-telegram-bot-api');
+const { Configuration, OpenAIApi } = require('openai');
+const axios = require('axios');
 
-// 创建 Telegram 机器人
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true })
+// === 环境变量 ===
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// 获取实时行情（CoinGecko 示例）
-async function getMarketSummary() {
+// === 初始化 Telegram Bot ===
+const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
+
+// === 初始化 OpenAI ===
+const configuration = new Configuration({
+  apiKey: OPENAI_API_KEY,
+});
+const openai = new OpenAIApi(configuration);
+
+// === 获取币安实时行情数据 ===
+async function getMarketContext(symbol = 'BTCUSDT') {
   try {
-    const { data } = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
-      params: {
-        ids: 'bitcoin,ethereum,solana',
-        vs_currencies: 'usd',
-        include_24hr_change: true,
-      },
-    })
-    return `
-📊 当前行情：
-• BTC: $${data.bitcoin.usd.toFixed(2)}（24h ${data.bitcoin.usd_24h_change.toFixed(2)}%）
-• ETH: $${data.ethereum.usd.toFixed(2)}（24h ${data.ethereum.usd_24h_change.toFixed(2)}%）
-• SOL: $${data.solana.usd.toFixed(2)}（24h ${data.solana.usd_24h_change.toFixed(2)}%）
-`
-  } catch (error) {
-    return '❌ 获取市场行情失败，请稍后重试。'
+    const priceRes = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
+    const latestPrice = parseFloat(priceRes.data.price);
+
+    const klineRes = await axios.get(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1h&limit=2`);
+    const prevClose = parseFloat(klineRes.data[0][4]);
+    const changePct = ((latestPrice - prevClose) / prevClose) * 100;
+
+    return `当前${symbol}价格为 ${latestPrice.toFixed(2)} USDT，过去1小时涨幅为 ${changePct.toFixed(2)}%。`;
+  } catch (err) {
+    return '⚠️ 无法获取行情数据，请稍后再试。';
   }
 }
 
-// 处理用户消息
+// === 处理用户消息 ===
 bot.on('message', async (msg) => {
-  const chatId = msg.chat.id
-  const question = msg.text?.trim()
+  const chatId = msg.chat.id;
+  const prompt = msg.text;
 
-  if (!question) return bot.sendMessage(chatId, '请输入问题～')
+  // 获取行情上下文
+  const market = await getMarketContext();
 
-  const market = await getMarketSummary()
-
-  // 调用 OpenAI API
+  // 构造 GPT 请求
   try {
-    const { data } = await axios.post(
-      'https://api.openai.com/v1/chat/completions',
-      {
-        model: 'gpt-4',
-        messages: [
-          { role: 'system', content: '你是一位经验丰富的合约交易专家，擅长分析币种的趋势、支撑压力位、合约方向、入场价格、止盈止损建议。你的语言简洁明确，具有实战操作性。' },
-          { role: 'user', content: `${market}\n\n用户提问：${question}` },
-        ],
-        max_tokens: 500,
-        temperature: 0.7,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    const completion = await openai.createChatCompletion({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: "你是一位专业的加密货币合约交易专家，请根据实时行情给出简洁、清晰、实际可操作的建议。包括：趋势判断、可能的入场价、止盈止损策略等。"
         },
-      }
-    )
+        {
+          role: "user",
+          content: `${market}\n\n用户提问：${prompt}`
+        }
+      ]
+    });
 
-    const answer = data.choices[0].message.content
-    bot.sendMessage(chatId, answer)
-  } catch (err) {
-    console.error('❌ OpenAI API 调用失败:', err.response?.data || err.message)
-    bot.sendMessage(chatId, '⚠️ 无法获取建议，请稍后再试。')
+    const reply = completion.data.choices[0].message.content;
+    bot.sendMessage(chatId, reply);
+  } catch (error) {
+    console.error("❌ OpenAI API 调用失败:", error.message);
+    bot.sendMessage(chatId, '⚠️ 无法获取建议，请稍后再试。');
   }
-})
+});
