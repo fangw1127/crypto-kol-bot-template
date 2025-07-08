@@ -1,14 +1,11 @@
 {
-  "name": "crypto-kol-bot",
-  "version": "1.0.0",
   "type": "module",
-  "main": "kol_bot.js",
   "scripts": {
     "start": "node kol_bot.js"
   },
   "dependencies": {
-    "dotenv": "^16.3.1",
-    "openai": "^4.29.1",
-    "telegraf": "^4.12.3"
+    "telegraf": "^4.16.2",
+    "openai": "^4.24.0",
+    "dotenv": "^16.4.5"
   }
 }
