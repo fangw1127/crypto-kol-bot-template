@@ -1,5 +1,9 @@
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
 dotenv.config();
+
+console.log("Bot Token:", process.env.TELEGRAM_TOKEN);  // ✅ 检查点
+import { Telegraf } from 'telegraf';
+const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 
 import axios from 'axios';
 import TelegramBot from 'node-telegram-bot-api';
