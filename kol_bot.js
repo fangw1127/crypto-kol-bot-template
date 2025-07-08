@@ -1,51 +1,42 @@
-// === 加载环境变量 ===
-import dotenv from 'dotenv'
-dotenv.config()
-
-// === 校验 token ===
-if (!process.env.BOT_TOKEN) {
-  console.error('❌ BOT_TOKEN 环境变量未设置，无法启动机器人。')
-  console.error('📌 请确认你在 Railway 或部署平台已添加环境变量 BOT_TOKEN。')
-  process.exit(1)
-}
-
 import { Telegraf } from 'telegraf'
 import axios from 'axios'
 
-// === 初始化 Bot ===
-const bot = new Telegraf(process.env.BOT_TOKEN)
-console.log('🚀 机器人已启动')
+const BOT_TOKEN = process.env.BOT_TOKEN
+if (!BOT_TOKEN) throw new Error('❌ BOT_TOKEN is missing in environment variables.')
 
-// === 指令: /start
+const bot = new Telegraf(BOT_TOKEN)
+
 bot.start((ctx) => {
-  ctx.reply('你好，我是 GPT-4 合约机器人 👋')
+  ctx.reply('你好，我是 GPT-4 合约机器人 🤖')
 })
 
-// === 指令: /price BTC
 bot.command('price', async (ctx) => {
-  const input = ctx.message.text.split(' ')
-  const symbol = input[1]?.toUpperCase()
+  const args = ctx.message.text.split(' ')
+  if (args.length < 2) return ctx.reply('用法：/price BTC')
 
-  if (!symbol) {
-    return ctx.reply('请提供币种，如 /price BTC')
-  }
+  const symbol = args[1].toUpperCase()
+  const spotSymbol = symbol + 'USDT'
 
   try {
-    // 先查现货（spot）
-    let resp = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}USDT`)
-    const price = parseFloat(resp.data.price)
-    return ctx.reply(`💰 ${symbol}/USDT 当前现货价格：${price.toFixed(4)} USDT`)
-  } catch (e1) {
+    // 优先查现货
+    const spot = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${spotSymbol}`)
+    const price = parseFloat(spot.data.price).toFixed(6)
+    return ctx.reply(`📈 ${symbol}（现货）价格：${price} USDT`)
+  } catch (e) {
+    // 如果现货查不到，就尝试查询合约（智能匹配）
     try {
-      // 再查合约（futures）
-      let fut = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}USDT`)
-      const futPrice = parseFloat(fut.data.price)
-      return ctx.reply(`💰 ${symbol}/USDT 当前合约价格：${futPrice.toFixed(4)} USDT`)
-    } catch (e2) {
+      const allSymbolsResp = await axios.get('https://fapi.binance.com/fapi/v1/exchangeInfo')
+      const matched = allSymbolsResp.data.symbols.find(s => s.symbol.endsWith(symbol + 'USDT'))
+      if (!matched) return ctx.reply(`❌ 查询失败，${symbol} 不是支持的币种`)
+
+      const fut = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${matched.symbol}`)
+      const price = parseFloat(fut.data.price).toFixed(6)
+      return ctx.reply(`📈 ${symbol}（合约：${matched.symbol}）价格：${price} USDT`)
+    } catch (err) {
       return ctx.reply(`❌ 查询失败，${symbol} 可能不是支持的币种`)
     }
   }
 })
 
-// === 启动
 bot.launch()
+console.log('🚀 机器人已启动')
