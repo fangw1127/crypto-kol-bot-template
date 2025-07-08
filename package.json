@@ -1,7 +1,9 @@
 {
   "type": "module",
   "scripts": {
-    "start": "node kol_bot.js"
+    "start": "node kol_bot.js"，
+    "node-fetch": "^3.3.2",
+    "telegraf": "^4.16.2"
   },
   "dependencies": {
     "telegraf": "^4.17.1",
