@@ -1,59 +1,51 @@
-// kol_bot.js
+// === 加载环境变量 ===
+import dotenv from 'dotenv'
+dotenv.config()
+
+// === 校验 token ===
+if (!process.env.BOT_TOKEN) {
+  console.error('❌ BOT_TOKEN 环境变量未设置，无法启动机器人。')
+  console.error('📌 请确认你在 Railway 或部署平台已添加环境变量 BOT_TOKEN。')
+  process.exit(1)
+}
 
 import { Telegraf } from 'telegraf'
 import axios from 'axios'
 
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN)
+// === 初始化 Bot ===
+const bot = new Telegraf(process.env.BOT_TOKEN)
+console.log('🚀 机器人已启动')
 
-// 币安所有交易对缓存
-let binanceSymbols = []
+// === 指令: /start
+bot.start((ctx) => {
+  ctx.reply('你好，我是 GPT-4 合约机器人 👋')
+})
 
-// 初始化加载交易对列表
-async function loadBinanceSymbols() {
-  try {
-    const res = await axios.get('https://api.binance.com/api/v3/exchangeInfo')
-    binanceSymbols = res.data.symbols.map(s => s.symbol)
-    console.log(`✅ Binance 交易对已加载 (${binanceSymbols.length}) 个`)
-  } catch (err) {
-    console.error('❌ 获取币安交易对列表失败', err.message)
-  }
-}
-
-// 启动时加载交易对列表
-loadBinanceSymbols()
-
-// /start 指令
-bot.start((ctx) => ctx.reply('🤖 欢迎使用加密货币 KOL 助手！发送 /price BTC 查看币价'))
-
-// /price 查询币价
+// === 指令: /price BTC
 bot.command('price', async (ctx) => {
-  const args = ctx.message.text.split(' ').slice(1)
-  if (args.length === 0) {
-    return ctx.reply('❗用法：/price BTC（输入币种简称）')
-  }
+  const input = ctx.message.text.split(' ')
+  const symbol = input[1]?.toUpperCase()
 
-  const symbolInput = args[0].toUpperCase()
-
-  // 查找匹配的现货 USDT 交易对
-  const match = binanceSymbols.find(s =>
-    s.endsWith('USDT') && s.includes(symbolInput)
-  )
-
-  if (!match) {
-    return ctx.reply(`❌ 查询失败，${symbolInput} 可能不是支持的币种`)
+  if (!symbol) {
+    return ctx.reply('请提供币种，如 /price BTC')
   }
 
   try {
-    const url = `https://api.binance.com/api/v3/ticker/price?symbol=${match}`
-    const res = await axios.get(url)
-    const price = parseFloat(res.data.price)
-
-    return ctx.reply(`💰 ${match} 当前价格：${price.toLocaleString()} USDT`)
-  } catch (err) {
-    console.error('❌ 获取价格失败', err.message)
-    return ctx.reply(`❌ 获取 ${match} 价格失败`)
+    // 先查现货（spot）
+    let resp = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}USDT`)
+    const price = parseFloat(resp.data.price)
+    return ctx.reply(`💰 ${symbol}/USDT 当前现货价格：${price.toFixed(4)} USDT`)
+  } catch (e1) {
+    try {
+      // 再查合约（futures）
+      let fut = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}USDT`)
+      const futPrice = parseFloat(fut.data.price)
+      return ctx.reply(`💰 ${symbol}/USDT 当前合约价格：${futPrice.toFixed(4)} USDT`)
+    } catch (e2) {
+      return ctx.reply(`❌ 查询失败，${symbol} 可能不是支持的币种`)
+    }
   }
 })
 
+// === 启动
 bot.launch()
-console.log('🚀 机器人已启动')
