@@ -1,63 +1,85 @@
-// === crypto-kol-bot：整合现价 /info 项目信息 /trend AI预测 ===
-import { Telegraf } from 'telegraf'
-import axios from 'axios'
+// === 📦 必要依赖安装（先执行）===
+// npm install telegraf axios dotenv
 
-const bot = new Telegraf(process.env.BOT_TOKEN)
+import { Telegraf } from 'telegraf';
+import axios from 'axios';
+import dotenv from 'dotenv';
+dotenv.config();
 
-// === 币种价格查询 ===
-bot.command('price', async (ctx) => {
-  const parts = ctx.message.text.split(' ')
-  if (parts.length < 2) return ctx.reply('❌ 用法错误，例如：/price BTC')
-  const symbol = parts[1].toUpperCase()
+const bot = new Telegraf(process.env.BOT_TOKEN);
 
+// === 🧠 AI 预测函数（预留，可接模型） ===
+async function getAIPrediction(symbol) {
+  return `🤖 ${symbol} 未来趋势预测暂不可用，敬请期待！`;
+}
+
+// === 💰 查询现货或合约价格 ===
+async function getCryptoPrice(symbol) {
+  const upper = symbol.toUpperCase();
   try {
-    // 优先现货
-    const spot = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}USDT`)
-    const price = parseFloat(spot.data.price).toFixed(4)
-    return ctx.reply(`📈 ${symbol} 现货价格：$${price}`)
+    // 优先查现货
+    let res = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${upper}USDT`);
+    return `💰 ${upper} 现货价格: $${parseFloat(res.data.price).toFixed(4)}`;
   } catch (e1) {
     try {
-      // 其次合约
-      const fut = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}USDT`)
-      const price = parseFloat(fut.data.price).toFixed(4)
-      return ctx.reply(`📉 ${symbol} 合约价格：$${price}`)
+      // 再查合约
+      let res = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${upper}USDT`);
+      return `📉 ${upper} 合约价格: $${parseFloat(res.data.price).toFixed(4)}`;
     } catch (e2) {
-      return ctx.reply(`❌ 查询失败，${symbol} 可能不是支持的币种`)
+      return `❌ 查询失败，${upper} 可能不是支持的币种`;
     }
   }
-})
+}
 
-// === 项目信息查询 ===
-bot.command('info', async (ctx) => {
-  const parts = ctx.message.text.split(' ')
-  if (parts.length < 2) return ctx.reply('❌ 用法错误，例如：/info BTC')
-  const query = parts[1].toLowerCase()
+// === 📚 查询币种项目信息（CoinGecko） ===
+async function getCoinInfo(symbol) {
   try {
-    // CoinGecko 查询
-    const res = await axios.get(`https://api.coingecko.com/api/v3/coins/${query}`)
-    const coin = res.data
-    const name = coin.name || query
-    const desc = coin.description?.en?.slice(0, 300) || '无项目简介'
-    const homepage = coin.links?.homepage?.[0] || '无官网'
-    return ctx.replyWithMarkdownV2(`📘 *${name} 项目简介*\n\n${desc}\n\n🌐 官网: [${homepage}](${homepage})`)
-  } catch (e) {
-    return ctx.reply(`❌ 没有找到 ${query.toUpperCase()} 的详细资料`)
+    const coinList = await axios.get('https://api.coingecko.com/api/v3/coins/list');
+    const match = coinList.data.find(c => c.symbol.toLowerCase() === symbol.toLowerCase());
+    if (!match) return `❌ 没有找到 ${symbol.toUpperCase()} 的详细资料`;
+
+    const coinData = await axios.get(`https://api.coingecko.com/api/v3/coins/${match.id}`);
+    const info = coinData.data;
+
+    return `🧾 ${info.name} 项目信息\n\n` +
+      `${info.description.en?.split('. ')[0] || '暂无介绍'}\n` +
+      `官网: ${info.links.homepage[0] || '暂无'}\n` +
+      `标签: ${info.categories.slice(0, 3).join(', ') || '无'}`;
+  } catch (err) {
+    return `❌ 查询 ${symbol.toUpperCase()} 项目信息失败，请稍后再试`;
   }
-})
+}
 
-// === AI 趋势预测（模拟占位） ===
-bot.command('trend', async (ctx) => {
-  const parts = ctx.message.text.split(' ')
-  if (parts.length < 2) return ctx.reply('❌ 用法错误，例如：/trend BTC')
-  const symbol = parts[1].toUpperCase()
-  // TODO：调用你的AI模型服务
-  return ctx.reply(`🤖 AI预测 ${symbol}：未来1小时趋势为 ⚠️ 震荡（模拟结果）`)
-})
+// === 🤖 命令绑定 ===
+bot.start(ctx => ctx.reply('你好，我是 GPT-4 合约机器人 🤖，支持 /price BTC、/info ETH、/trend SOL 等命令'));
 
-// === 启动提示 ===
-bot.start((ctx) => {
-  ctx.reply(`你好，我是 GPT-4 合约机器人 🤖，支持 /price BTC、/info ETH、/trend SOL 等命令`)
-})
+bot.command('price', async ctx => {
+  const symbol = ctx.message.text.split(' ')[1];
+  if (!symbol) return ctx.reply('请输入币种，如 /price BTC');
+  const msg = await getCryptoPrice(symbol);
+  ctx.reply(msg);
+});
 
-bot.launch()
-console.log('🚀 机器人已启动')
+bot.command('info', async ctx => {
+  const symbol = ctx.message.text.split(' ')[1];
+  if (!symbol) return ctx.reply('请输入币种，如 /info BTC');
+  const msg = await getCoinInfo(symbol);
+  ctx.reply(msg);
+});
+
+bot.command('trend', async ctx => {
+  const symbol = ctx.message.text.split(' ')[1];
+  if (!symbol) return ctx.reply('请输入币种，如 /trend BTC');
+  const msg = await getAIPrediction(symbol);
+  ctx.reply(msg);
+});
+
+bot.command('help', ctx => {
+  ctx.reply('📌 支持以下命令:\n/price BTC - 查询价格\n/info ETH - 项目信息\n/trend SOL - AI预测\n/help - 显示帮助');
+});
+
+bot.launch().then(() => console.log('🚀 机器人已启动'));
+
+// === 关闭提示 ===
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
