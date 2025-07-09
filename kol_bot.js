@@ -1,7 +1,7 @@
 // kol_bot.js
 
 import axios from 'axios'
-import TelegramBot from 'node-telegram-bot-api'
+import { Telegraf } from 'telegraf'
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true })
 
